@@ -7,6 +7,7 @@
   <img alt="language" src="https://img.shields.io/badge/language-Go-00ADD8">
   <img alt="bitbucket" src="https://img.shields.io/badge/target-Bitbucket%20Cloud-0052CC">
   <img alt="mvp" src="https://img.shields.io/badge/stage-MVP-orange">
+  <img alt="license" src="https://img.shields.io/badge/license-MIT-green">
 </p>
 
 `bkt` is a small command-line tool inspired by `glab`, but aimed at **Bitbucket Cloud**.
@@ -213,6 +214,6 @@ This is the first spark.
 
 ## 📜 License
 
-No license has been chosen yet.
+MIT License.
 
-Add one before expecting strangers from the internet to contribute without awkward legal fog.
+Small, permissive, and friendly to forks, experiments, internal company use, and random weekend terminal sorcery.
