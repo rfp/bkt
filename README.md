@@ -72,6 +72,8 @@ Then run:
 bkt auth login
 ```
 
+The token prompt uses hidden terminal input, so the API token is not echoed while typing.
+
 The MVP currently stores config here:
 
 ```text
