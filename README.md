@@ -96,6 +96,20 @@ The API token is stored in the operating system keychain:
 
 If the token cannot be stored in the keychain, login fails. There is intentionally no plain-text token fallback.
 
+## 🌐 API host support
+
+For now, `bkt` supports **Bitbucket Cloud only**.
+
+The only accepted API base URL is:
+
+```text
+https://api.bitbucket.org/2.0
+```
+
+This is intentional: the CLI refuses other hosts and non-HTTPS URLs before sending credentials anywhere.
+
+Bitbucket Data Center support may be added later, but it will require explicit configuration and separate safety checks.
+
 ## 🧭 Commands
 
 ### Auth
