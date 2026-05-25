@@ -116,6 +116,69 @@ func TestNewClientRejectsInvalidAPIBaseURL(t *testing.T) {
 	}
 }
 
+func TestRequestURLValidatesAbsoluteURLs(t *testing.T) {
+	client, err := newClient(Config{APIBaseURL: defaultAPIBaseURL})
+	if err != nil {
+		t.Fatalf("newClient returned error: %v", err)
+	}
+
+	tests := []struct {
+		name    string
+		path    string
+		want    string
+		wantErr bool
+	}{
+		{
+			name: "relative path allowed",
+			path: "/repositories/workspace/repo/pullrequests?pagelen=50",
+			want: defaultAPIBaseURL + "/repositories/workspace/repo/pullrequests?pagelen=50",
+		},
+		{
+			name: "absolute Bitbucket Cloud pagination URL allowed",
+			path: "https://api.bitbucket.org/2.0/repositories/workspace/repo/pullrequests?page=2",
+			want: "https://api.bitbucket.org/2.0/repositories/workspace/repo/pullrequests?page=2",
+		},
+		{
+			name:    "different host rejected",
+			path:    "https://example.com/2.0/repositories/workspace/repo/pullrequests?page=2",
+			wantErr: true,
+		},
+		{
+			name:    "http scheme rejected",
+			path:    "http://api.bitbucket.org/2.0/repositories/workspace/repo/pullrequests?page=2",
+			wantErr: true,
+		},
+		{
+			name:    "wrong API path rejected",
+			path:    "https://api.bitbucket.org/1.0/repositories/workspace/repo/pullrequests?page=2",
+			wantErr: true,
+		},
+		{
+			name:    "fragment rejected",
+			path:    "https://api.bitbucket.org/2.0/repositories/workspace/repo/pullrequests?page=2#token",
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := client.requestURL(tt.path)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("expected error for %q", tt.path)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got != tt.want {
+				t.Fatalf("expected %q, got %q", tt.want, got)
+			}
+		})
+	}
+}
+
 func TestLoadConfigRejectsInvalidAPIBaseURL(t *testing.T) {
 	dir := withTempConfigDir(t)
 	config := "email=rui@example.com\nusername=rfp\nworkspace=workspace\napi_base_url=https://example.com/2.0\n"
