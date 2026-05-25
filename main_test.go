@@ -71,6 +71,64 @@ func withFakeKeyring(t *testing.T) *fakeKeyring {
 	return fake
 }
 
+func TestValidateAPIBaseURLAllowsOnlyBitbucketCloud(t *testing.T) {
+	tests := []struct {
+		name    string
+		raw     string
+		want    string
+		wantErr bool
+	}{
+		{name: "empty uses default", raw: "", want: defaultAPIBaseURL},
+		{name: "canonical", raw: "https://api.bitbucket.org/2.0", want: defaultAPIBaseURL},
+		{name: "trailing slash", raw: "https://api.bitbucket.org/2.0/", want: defaultAPIBaseURL},
+		{name: "surrounding whitespace", raw: "  https://api.bitbucket.org/2.0  ", want: defaultAPIBaseURL},
+		{name: "http rejected", raw: "http://api.bitbucket.org/2.0", wantErr: true},
+		{name: "wrong host rejected", raw: "https://example.com/2.0", wantErr: true},
+		{name: "wrong path rejected", raw: "https://api.bitbucket.org/1.0", wantErr: true},
+		{name: "missing scheme rejected", raw: "api.bitbucket.org/2.0", wantErr: true},
+		{name: "query rejected", raw: "https://api.bitbucket.org/2.0?x=1", wantErr: true},
+		{name: "fragment rejected", raw: "https://api.bitbucket.org/2.0#token", wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := validateAPIBaseURL(tt.raw)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("expected error for %q", tt.raw)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got != tt.want {
+				t.Fatalf("expected %q, got %q", tt.want, got)
+			}
+		})
+	}
+}
+
+func TestNewClientRejectsInvalidAPIBaseURL(t *testing.T) {
+	_, err := newClient(Config{APIBaseURL: "https://example.com/2.0"})
+	if err == nil {
+		t.Fatal("expected newClient to reject non-Bitbucket API host")
+	}
+}
+
+func TestLoadConfigRejectsInvalidAPIBaseURL(t *testing.T) {
+	dir := withTempConfigDir(t)
+	config := "email=rui@example.com\nusername=rfp\nworkspace=workspace\napi_base_url=https://example.com/2.0\n"
+	if err := os.WriteFile(filepath.Join(dir, "config"), []byte(config), 0600); err != nil {
+		t.Fatalf("could not write config: %v", err)
+	}
+
+	_, err := loadConfig()
+	if err == nil {
+		t.Fatal("expected loadConfig to reject invalid api_base_url")
+	}
+}
+
 func TestSaveConfigDoesNotWriteToken(t *testing.T) {
 	dir := withTempConfigDir(t)
 
@@ -97,6 +155,30 @@ func TestSaveConfigDoesNotWriteToken(t *testing.T) {
 	}
 	if strings.Contains(configText, cfg.Token) {
 		t.Fatal("config file contains the API token value")
+	}
+}
+
+func TestSaveConfigNormalizesAPIBaseURL(t *testing.T) {
+	dir := withTempConfigDir(t)
+
+	cfg := Config{
+		Email:      "rui@example.com",
+		Username:   "rfp",
+		Workspace:  "workspace",
+		APIBaseURL: "https://api.bitbucket.org/2.0/",
+	}
+
+	if err := saveConfig(cfg); err != nil {
+		t.Fatalf("saveConfig returned error: %v", err)
+	}
+
+	content, err := os.ReadFile(filepath.Join(dir, "config"))
+	if err != nil {
+		t.Fatalf("could not read config file: %v", err)
+	}
+
+	if !strings.Contains(string(content), "api_base_url="+defaultAPIBaseURL) {
+		t.Fatalf("expected normalized API base URL, got:\n%s", string(content))
 	}
 }
 
