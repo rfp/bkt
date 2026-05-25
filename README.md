@@ -50,6 +50,12 @@ go build -o bkt .
 ./bkt help
 ```
 
+Run the test suite:
+
+```bash
+go test ./...
+```
+
 Optionally move it to your PATH:
 
 ```bash
@@ -186,8 +192,8 @@ But before splitting files, the project should earn the complexity.
 
 - [x] Secure credential storage via OS keychain.
 - [ ] Split code into packages.
-- [ ] Add tests.
-- [ ] Add GitHub Actions.
+- [x] Add tests.
+- [x] Add GitHub Actions.
 - [ ] Add `bkt repo clone`.
 - [ ] Add `bkt pr comment`.
 - [ ] Add `bkt pr diff`.
