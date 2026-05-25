@@ -24,7 +24,7 @@ import (
 )
 
 const (
-	keyringService   = "bkt"
+	keyringService    = "bkt"
 	defaultAPIBaseURL = "https://api.bitbucket.org/2.0"
 )
 
@@ -48,15 +48,16 @@ type Client struct {
 	Token   string
 	HTTP    *http.Client
 }
-type Link struct {
-	Href string `json:"href"`
-}
+
+type Link struct{ Href string `json:"href"` }
 type Links map[string]Link
+
 type User struct {
 	DisplayName string `json:"display_name"`
 	Nickname    string `json:"nickname"`
 	AccountID   string `json:"account_id"`
 }
+
 type Repository struct {
 	Name      string `json:"name"`
 	FullName  string `json:"full_name"`
@@ -65,13 +66,14 @@ type Repository struct {
 	IsPrivate bool   `json:"is_private"`
 	Links     Links  `json:"links"`
 }
-type BranchRef struct {
-	Name string `json:"name"`
-}
+
+type BranchRef struct{ Name string `json:"name"` }
+
 type PRSide struct {
 	Branch     BranchRef  `json:"branch"`
 	Repository Repository `json:"repository"`
 }
+
 type PullRequest struct {
 	ID          int    `json:"id"`
 	Title       string `json:"title"`
@@ -82,10 +84,12 @@ type PullRequest struct {
 	Author      User   `json:"author"`
 	Links       Links  `json:"links"`
 }
+
 type PipelineTarget struct {
 	RefName string `json:"ref_name"`
 	Type    string `json:"type"`
 }
+
 type Pipeline struct {
 	UUID        string         `json:"uuid"`
 	BuildNumber int            `json:"build_number"`
@@ -95,10 +99,12 @@ type Pipeline struct {
 	CompletedOn string         `json:"completed_on"`
 	Links       Links          `json:"links"`
 }
+
 type page[T any] struct {
 	Values []T    `json:"values"`
 	Next   string `json:"next"`
 }
+
 type RepoRef struct {
 	Workspace string
 	Slug      string
@@ -110,10 +116,12 @@ func main() {
 		help()
 		return
 	}
+
 	cfg, err := loadConfig()
 	if err != nil {
 		fatal(err)
 	}
+
 	switch os.Args[1] {
 	case "auth":
 		auth(cfg, os.Args[2:])
@@ -151,6 +159,7 @@ func auth(cfg Config, args []string) {
 	if len(args) == 0 {
 		fatal(errors.New("missing auth subcommand"))
 	}
+
 	switch args[0] {
 	case "login":
 		var err error
@@ -158,6 +167,7 @@ func auth(cfg Config, args []string) {
 		if err != nil {
 			fatal(err)
 		}
+
 		cfg.Email = readLine("Atlassian account email: ")
 		cfg.Username = readLine("Bitbucket username, optional: ")
 		token, err := readSecret("API token: ")
@@ -166,9 +176,11 @@ func auth(cfg Config, args []string) {
 		}
 		cfg.Token = token
 		cfg.Workspace = readLine("Default workspace, optional: ")
+
 		if cfg.Email == "" || cfg.Token == "" {
 			fatal(errors.New("email and token are required"))
 		}
+
 		client := clientOrFatal(cfg)
 		u, err := client.CurrentUser()
 		if err != nil {
@@ -186,8 +198,7 @@ func auth(cfg Config, args []string) {
 		fmt.Printf("Logged in as %s (%s)\n", u.DisplayName, cfg.Email)
 	case "status":
 		ensureAuth(cfg)
-		client := clientOrFatal(cfg)
-		u, err := client.CurrentUser()
+		u, err := clientOrFatal(cfg).CurrentUser()
 		if err != nil {
 			fatal(err)
 		}
@@ -214,6 +225,7 @@ func repo(cfg Config, args []string) {
 	fs := flag.NewFlagSet("repo view", flag.ExitOnError)
 	jsonOut := fs.Bool("json", false, "JSON output")
 	_ = fs.Parse(args[1:])
+
 	ensureAuth(cfg)
 	rc, err := detectRepo("origin")
 	if err != nil {
@@ -234,6 +246,7 @@ func pr(cfg Config, args []string) {
 	if len(args) == 0 {
 		fatal(errors.New("missing pr subcommand"))
 	}
+
 	switch args[0] {
 	case "list":
 		prList(cfg, args[1:])
@@ -257,6 +270,7 @@ func prList(cfg Config, args []string) {
 	state := fs.String("state", "OPEN", "OPEN, MERGED, DECLINED, SUPERSEDED")
 	jsonOut := fs.Bool("json", false, "JSON output")
 	_ = fs.Parse(args)
+
 	ensureAuth(cfg)
 	rc, err := detectRepo("origin")
 	if err != nil {
@@ -270,6 +284,7 @@ func prList(cfg Config, args []string) {
 		printJSON(prs)
 		return
 	}
+
 	rows := [][]string{}
 	for _, pr := range prs {
 		rows = append(rows, []string{strconv.Itoa(pr.ID), pr.State, pr.Source.Branch.Name, pr.Destination.Branch.Name, pr.Title})
@@ -283,6 +298,7 @@ func prView(cfg Config, args []string) {
 	web := fs.Bool("web", false, "open in browser")
 	_ = fs.Parse(args)
 	id := requireID(fs.Args())
+
 	ensureAuth(cfg)
 	rc, err := detectRepo("origin")
 	if err != nil {
@@ -311,6 +327,7 @@ func prCreate(cfg Config, args []string) {
 	target := fs.String("target", "main", "target branch")
 	jsonOut := fs.Bool("json", false, "JSON output")
 	_ = fs.Parse(args)
+
 	ensureAuth(cfg)
 	rc, err := detectRepo("origin")
 	if err != nil {
@@ -376,6 +393,7 @@ func prMerge(cfg Config, args []string) {
 	msg := fs.String("message", "", "merge message")
 	_ = fs.Parse(args)
 	id := requireID(fs.Args())
+
 	ensureAuth(cfg)
 	rc, err := detectRepo("origin")
 	if err != nil {
@@ -391,11 +409,13 @@ func pipeline(cfg Config, args []string) {
 	if len(args) == 0 {
 		fatal(errors.New("missing pipeline subcommand"))
 	}
+
 	switch args[0] {
 	case "list":
 		fs := flag.NewFlagSet("pipeline list", flag.ExitOnError)
 		jsonOut := fs.Bool("json", false, "JSON output")
 		_ = fs.Parse(args[1:])
+
 		ensureAuth(cfg)
 		rc, err := detectRepo("origin")
 		if err != nil {
@@ -409,6 +429,7 @@ func pipeline(cfg Config, args []string) {
 			printJSON(pipes)
 			return
 		}
+
 		rows := [][]string{}
 		for _, p := range pipes {
 			rows = append(rows, []string{strconv.Itoa(p.BuildNumber), pipelineState(p.State), p.Target.RefName, p.CreatedOn})
@@ -419,6 +440,7 @@ func pipeline(cfg Config, args []string) {
 		branch := fs.String("branch", "", "branch to run")
 		jsonOut := fs.Bool("json", false, "JSON output")
 		_ = fs.Parse(args[1:])
+
 		ensureAuth(cfg)
 		if *branch == "" {
 			var err error
@@ -471,7 +493,6 @@ func validateAPIBaseURL(raw string) (string, error) {
 	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
 		return "", fmt.Errorf("invalid API base URL: %q", raw)
 	}
-
 	if parsed.Scheme != "https" {
 		return "", fmt.Errorf("invalid API base URL %q: only https is allowed", raw)
 	}
@@ -490,6 +511,37 @@ func validateAPIBaseURL(raw string) (string, error) {
 	return defaultAPIBaseURL, nil
 }
 
+func (c *Client) requestURL(path string) (string, error) {
+	if !strings.HasPrefix(path, "http://") && !strings.HasPrefix(path, "https://") {
+		return c.BaseURL + path, nil
+	}
+
+	requestURL, err := url.Parse(path)
+	if err != nil || requestURL.Scheme == "" || requestURL.Host == "" {
+		return "", fmt.Errorf("invalid request URL: %q", path)
+	}
+
+	baseURL, err := url.Parse(c.BaseURL)
+	if err != nil {
+		return "", err
+	}
+
+	basePath := strings.TrimRight(baseURL.EscapedPath(), "/")
+	requestPath := strings.TrimRight(requestURL.EscapedPath(), "/")
+
+	if requestURL.Scheme != baseURL.Scheme || requestURL.Host != baseURL.Host {
+		return "", fmt.Errorf("refusing to call URL outside configured API host: %q", path)
+	}
+	if requestPath != basePath && !strings.HasPrefix(requestPath, basePath+"/") {
+		return "", fmt.Errorf("refusing to call URL outside configured API path: %q", path)
+	}
+	if requestURL.Fragment != "" {
+		return "", fmt.Errorf("refusing to call URL with fragment: %q", path)
+	}
+
+	return requestURL.String(), nil
+}
+
 func (c *Client) do(method, path string, body any, out any) error {
 	var r io.Reader
 	if body != nil {
@@ -499,10 +551,12 @@ func (c *Client) do(method, path string, body any, out any) error {
 		}
 		r = bytes.NewReader(b)
 	}
-	u := path
-	if !strings.HasPrefix(path, "http") {
-		u = c.BaseURL + path
+
+	u, err := c.requestURL(path)
+	if err != nil {
+		return err
 	}
+
 	req, err := http.NewRequest(method, u, r)
 	if err != nil {
 		return err
@@ -514,11 +568,13 @@ func (c *Client) do(method, path string, body any, out any) error {
 	if c.Email != "" && c.Token != "" {
 		req.SetBasicAuth(c.Email, c.Token)
 	}
+
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
+
 	data, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("bitbucket API error %d: %s", resp.StatusCode, strings.TrimSpace(string(data)))
@@ -528,21 +584,25 @@ func (c *Client) do(method, path string, body any, out any) error {
 	}
 	return json.Unmarshal(data, out)
 }
+
 func (c *Client) CurrentUser() (User, error) {
 	var u User
 	err := c.do(http.MethodGet, "/user", nil, &u)
 	return u, err
 }
+
 func (c *Client) Repo(workspace, repo string) (Repository, error) {
 	var r Repository
 	err := c.do(http.MethodGet, "/repositories/"+url.PathEscape(workspace)+"/"+url.PathEscape(repo), nil, &r)
 	return r, err
 }
+
 func (c *Client) ListPRs(workspace, repo, state string) ([]PullRequest, error) {
 	path := "/repositories/" + url.PathEscape(workspace) + "/" + url.PathEscape(repo) + "/pullrequests?pagelen=50"
 	if state != "" {
 		path += "&state=" + url.QueryEscape(strings.ToUpper(state))
 	}
+
 	var all []PullRequest
 	for path != "" {
 		var p page[PullRequest]
@@ -554,20 +614,29 @@ func (c *Client) ListPRs(workspace, repo, state string) ([]PullRequest, error) {
 	}
 	return all, nil
 }
+
 func (c *Client) PR(workspace, repo string, id int) (PullRequest, error) {
 	var pr PullRequest
 	err := c.do(http.MethodGet, fmt.Sprintf("/repositories/%s/%s/pullrequests/%d", url.PathEscape(workspace), url.PathEscape(repo), id), nil, &pr)
 	return pr, err
 }
+
 func (c *Client) CreatePR(workspace, repo, title, description, source, target string) (PullRequest, error) {
-	payload := map[string]any{"title": title, "description": description, "source": map[string]any{"branch": map[string]string{"name": source}}, "destination": map[string]any{"branch": map[string]string{"name": target}}}
+	payload := map[string]any{
+		"title":       title,
+		"description": description,
+		"source":      map[string]any{"branch": map[string]string{"name": source}},
+		"destination": map[string]any{"branch": map[string]string{"name": target}},
+	}
 	var pr PullRequest
 	err := c.do(http.MethodPost, "/repositories/"+url.PathEscape(workspace)+"/"+url.PathEscape(repo)+"/pullrequests", payload, &pr)
 	return pr, err
 }
+
 func (c *Client) ApprovePR(workspace, repo string, id int) error {
 	return c.do(http.MethodPost, fmt.Sprintf("/repositories/%s/%s/pullrequests/%d/approve", url.PathEscape(workspace), url.PathEscape(repo), id), nil, nil)
 }
+
 func (c *Client) MergePR(workspace, repo string, id int, message string) error {
 	payload := map[string]any{}
 	if message != "" {
@@ -575,6 +644,7 @@ func (c *Client) MergePR(workspace, repo string, id int, message string) error {
 	}
 	return c.do(http.MethodPost, fmt.Sprintf("/repositories/%s/%s/pullrequests/%d/merge", url.PathEscape(workspace), url.PathEscape(repo), id), payload, nil)
 }
+
 func (c *Client) ListPipelines(workspace, repo string) ([]Pipeline, error) {
 	path := "/repositories/" + url.PathEscape(workspace) + "/" + url.PathEscape(repo) + "/pipelines/?pagelen=20"
 	var all []Pipeline
@@ -588,6 +658,7 @@ func (c *Client) ListPipelines(workspace, repo string) ([]Pipeline, error) {
 	}
 	return all, nil
 }
+
 func (c *Client) RunPipeline(workspace, repo, branch string) (Pipeline, error) {
 	payload := map[string]any{"target": map[string]any{"type": "pipeline_ref_target", "ref_type": "branch", "ref_name": branch}}
 	var p Pipeline
@@ -600,7 +671,10 @@ func detectRepo(remote string) (RepoRef, error) {
 	if err != nil {
 		return RepoRef{}, err
 	}
-	res := []*regexp.Regexp{regexp.MustCompile(`bitbucket\.org[:/]([^/]+)/([^/.]+)(?:\.git)?$`), regexp.MustCompile(`bitbucket\.org[:/]([^/]+)/(.+?)(?:\.git)?$`)}
+	res := []*regexp.Regexp{
+		regexp.MustCompile(`bitbucket\.org[:/]([^/]+)/([^/.]+)(?:\.git)?$`),
+		regexp.MustCompile(`bitbucket\.org[:/]([^/]+)/(.+?)(?:\.git)?$`),
+	}
 	for _, re := range res {
 		m := re.FindStringSubmatch(u)
 		if len(m) == 3 {
@@ -609,6 +683,7 @@ func detectRepo(remote string) (RepoRef, error) {
 	}
 	return RepoRef{}, errors.New("remote does not look like a Bitbucket Cloud URL")
 }
+
 func remoteURL(remote string) (string, error) {
 	if remote == "" {
 		remote = "origin"
@@ -619,6 +694,7 @@ func remoteURL(remote string) (string, error) {
 	}
 	return strings.TrimSpace(string(out)), nil
 }
+
 func currentBranch() (string, error) {
 	out, err := exec.Command("git", "branch", "--show-current").Output()
 	if err != nil {
@@ -630,6 +706,7 @@ func currentBranch() (string, error) {
 	}
 	return b, nil
 }
+
 func run(name string, args ...string) error {
 	cmd := exec.Command(name, args...)
 	cmd.Stdout = os.Stdout
@@ -648,6 +725,7 @@ func configPath() (string, error) {
 	}
 	return filepath.Join(base, "bkt", "config"), nil
 }
+
 func loadConfig() (Config, error) {
 	cfg := Config{APIBaseURL: defaultAPIBaseURL}
 	p, err := configPath()
@@ -696,7 +774,6 @@ func loadConfig() (Config, error) {
 	if err != nil {
 		return cfg, err
 	}
-
 	if cfg.Email == "" {
 		return cfg, nil
 	}
@@ -709,7 +786,6 @@ func loadConfig() (Config, error) {
 	if !errors.Is(err, keyring.ErrNotFound) {
 		return cfg, fmt.Errorf("could not read API token from keychain: %w", err)
 	}
-
 	if legacyToken != "" {
 		if err := saveToken(cfg.Email, legacyToken); err != nil {
 			return cfg, fmt.Errorf("could not migrate API token to keychain: %w", err)
@@ -719,9 +795,9 @@ func loadConfig() (Config, error) {
 			return cfg, err
 		}
 	}
-
 	return cfg, nil
 }
+
 func saveConfig(cfg Config) error {
 	var err error
 	cfg.APIBaseURL, err = validateAPIBaseURL(cfg.APIBaseURL)
@@ -738,6 +814,7 @@ func saveConfig(cfg Config) error {
 	content := fmt.Sprintf("email=%s\nusername=%s\nworkspace=%s\napi_base_url=%s\n", cfg.Email, cfg.Username, cfg.Workspace, cfg.APIBaseURL)
 	return os.WriteFile(p, []byte(content), 0600)
 }
+
 func deleteConfig() error {
 	p, err := configPath()
 	if err != nil {
@@ -748,12 +825,15 @@ func deleteConfig() error {
 	}
 	return nil
 }
+
 func saveToken(account, token string) error {
 	return keyringSet(keyringService, account, token)
 }
+
 func loadToken(account string) (string, error) {
 	return keyringGet(keyringService, account)
 }
+
 func deleteToken(account string) error {
 	if err := keyringDelete(keyringService, account); err != nil && !errors.Is(err, keyring.ErrNotFound) {
 		return err
@@ -768,6 +848,7 @@ func printJSON(v any) {
 	}
 	fmt.Println(string(b))
 }
+
 func table(headers []string, rows [][]string) {
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 	for i, h := range headers {
@@ -788,6 +869,7 @@ func table(headers []string, rows [][]string) {
 	}
 	_ = w.Flush()
 }
+
 func pipelineState(s map[string]any) string {
 	if v, ok := s["name"].(string); ok {
 		return v
@@ -804,6 +886,7 @@ func pipelineState(s map[string]any) string {
 	}
 	return "UNKNOWN"
 }
+
 func requireID(args []string) int {
 	if len(args) != 1 {
 		fatal(errors.New("missing numeric id"))
@@ -814,17 +897,20 @@ func requireID(args []string) int {
 	}
 	return id
 }
+
 func ensureAuth(cfg Config) {
 	if cfg.Email == "" || cfg.Token == "" {
 		fatal(errors.New("not authenticated; run: bkt auth login"))
 	}
 }
+
 func readLine(prompt string) string {
 	fmt.Print(prompt)
 	r := bufio.NewReader(os.Stdin)
 	s, _ := r.ReadString('\n')
 	return strings.TrimSpace(s)
 }
+
 func readSecret(prompt string) (string, error) {
 	fmt.Print(prompt)
 	secret, err := term.ReadPassword(int(os.Stdin.Fd()))
@@ -834,6 +920,7 @@ func readSecret(prompt string) (string, error) {
 	}
 	return strings.TrimSpace(string(secret)), nil
 }
+
 func openURL(u string) {
 	switch {
 	case commandExists("open"):
@@ -844,16 +931,12 @@ func openURL(u string) {
 		fmt.Println(u)
 	}
 }
+
 func commandExists(name string) bool {
 	_, err := exec.LookPath(name)
 	return err == nil
 }
-func defaultString(v, d string) string {
-	if v == "" {
-		return d
-	}
-	return v
-}
+
 func fatal(err error) {
 	fmt.Fprintln(os.Stderr, "bkt:", err)
 	os.Exit(1)
