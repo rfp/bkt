@@ -18,6 +18,8 @@ import (
 	"strings"
 	"text/tabwriter"
 	"time"
+
+	"golang.org/x/term"
 )
 
 type Config struct {
@@ -142,7 +144,11 @@ func auth(cfg Config, args []string) {
 		cfg.APIBaseURL = defaultString(cfg.APIBaseURL, "https://api.bitbucket.org/2.0")
 		cfg.Email = readLine("Atlassian account email: ")
 		cfg.Username = readLine("Bitbucket username, optional: ")
-		cfg.Token = readLine("API token: ")
+		token, err := readSecret("API token: ")
+		if err != nil {
+			fatal(err)
+		}
+		cfg.Token = token
 		cfg.Workspace = readLine("Default workspace, optional: ")
 		if cfg.Email == "" || cfg.Token == "" {
 			fatal(errors.New("email and token are required"))
@@ -700,6 +706,15 @@ func readLine(prompt string) string {
 	r := bufio.NewReader(os.Stdin)
 	s, _ := r.ReadString('\n')
 	return strings.TrimSpace(s)
+}
+func readSecret(prompt string) (string, error) {
+	fmt.Print(prompt)
+	secret, err := term.ReadPassword(int(os.Stdin.Fd()))
+	fmt.Println()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(secret)), nil
 }
 func openURL(u string) {
 	switch {
