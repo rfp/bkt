@@ -71,6 +71,60 @@ func withFakeKeyring(t *testing.T) *fakeKeyring {
 	return fake
 }
 
+func withStdin(t *testing.T, input string) {
+	t.Helper()
+
+	oldStdin := os.Stdin
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("could not create stdin pipe: %v", err)
+	}
+
+	if _, err := w.WriteString(input); err != nil {
+		t.Fatalf("could not write fake stdin: %v", err)
+	}
+	if err := w.Close(); err != nil {
+		t.Fatalf("could not close fake stdin writer: %v", err)
+	}
+
+	os.Stdin = r
+	t.Cleanup(func() {
+		os.Stdin = oldStdin
+		_ = r.Close()
+	})
+}
+
+func TestConfirmActionDefaultsToNo(t *testing.T) {
+	withStdin(t, "\n")
+
+	if confirmAction("Do it?") {
+		t.Fatal("empty confirmation must default to no")
+	}
+}
+
+func TestConfirmActionAcceptsOnlyYes(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  bool
+	}{
+		{name: "y", input: "y\n", want: true},
+		{name: "yes", input: "yes\n", want: true},
+		{name: "uppercase yes", input: "YES\n", want: true},
+		{name: "n", input: "n\n", want: false},
+		{name: "random text", input: "definitely\n", want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			withStdin(t, tt.input)
+			if got := confirmAction("Do it?"); got != tt.want {
+				t.Fatalf("expected %t, got %t", tt.want, got)
+			}
+		})
+	}
+}
+
 func TestValidateAPIBaseURLAllowsOnlyBitbucketCloud(t *testing.T) {
 	tests := []struct {
 		name    string
