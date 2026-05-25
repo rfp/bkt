@@ -19,8 +19,11 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/zalando/go-keyring"
 	"golang.org/x/term"
 )
+
+const keyringService = "bkt"
 
 type Config struct {
 	Email      string
@@ -160,6 +163,9 @@ func auth(cfg Config, args []string) {
 		if cfg.Username == "" {
 			cfg.Username = u.Nickname
 		}
+		if err := saveToken(cfg.Email, cfg.Token); err != nil {
+			fatal(fmt.Errorf("could not store API token in keychain: %w", err))
+		}
 		if err := saveConfig(cfg); err != nil {
 			fatal(err)
 		}
@@ -172,6 +178,11 @@ func auth(cfg Config, args []string) {
 		}
 		fmt.Printf("Logged in as %s\nEmail: %s\nUsername: %s\nAPI: %s\n", u.DisplayName, cfg.Email, cfg.Username, cfg.APIBaseURL)
 	case "logout":
+		if cfg.Email != "" {
+			if err := deleteToken(cfg.Email); err != nil {
+				fatal(fmt.Errorf("could not remove API token from keychain: %w", err))
+			}
+		}
 		if err := deleteConfig(); err != nil {
 			fatal(err)
 		}
@@ -595,6 +606,8 @@ func loadConfig() (Config, error) {
 		return cfg, err
 	}
 	defer f.Close()
+
+	legacyToken := ""
 	s := bufio.NewScanner(f)
 	for s.Scan() {
 		line := strings.TrimSpace(s.Text())
@@ -612,14 +625,41 @@ func loadConfig() (Config, error) {
 		case "username":
 			cfg.Username = v
 		case "token":
-			cfg.Token = v
+			legacyToken = v
 		case "workspace":
 			cfg.Workspace = v
 		case "api_base_url":
 			cfg.APIBaseURL = v
 		}
 	}
-	return cfg, s.Err()
+	if err := s.Err(); err != nil {
+		return cfg, err
+	}
+
+	if cfg.Email == "" {
+		return cfg, nil
+	}
+
+	token, err := loadToken(cfg.Email)
+	if err == nil {
+		cfg.Token = token
+		return cfg, nil
+	}
+	if !errors.Is(err, keyring.ErrNotFound) {
+		return cfg, fmt.Errorf("could not read API token from keychain: %w", err)
+	}
+
+	if legacyToken != "" {
+		if err := saveToken(cfg.Email, legacyToken); err != nil {
+			return cfg, fmt.Errorf("could not migrate API token to keychain: %w", err)
+		}
+		cfg.Token = legacyToken
+		if err := saveConfig(cfg); err != nil {
+			return cfg, err
+		}
+	}
+
+	return cfg, nil
 }
 func saveConfig(cfg Config) error {
 	p, err := configPath()
@@ -629,7 +669,7 @@ func saveConfig(cfg Config) error {
 	if err := os.MkdirAll(filepath.Dir(p), 0700); err != nil {
 		return err
 	}
-	content := fmt.Sprintf("email=%s\nusername=%s\ntoken=%s\nworkspace=%s\napi_base_url=%s\n", cfg.Email, cfg.Username, cfg.Token, cfg.Workspace, cfg.APIBaseURL)
+	content := fmt.Sprintf("email=%s\nusername=%s\nworkspace=%s\napi_base_url=%s\n", cfg.Email, cfg.Username, cfg.Workspace, cfg.APIBaseURL)
 	return os.WriteFile(p, []byte(content), 0600)
 }
 func deleteConfig() error {
@@ -638,6 +678,18 @@ func deleteConfig() error {
 		return err
 	}
 	if err := os.Remove(p); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
+}
+func saveToken(account, token string) error {
+	return keyring.Set(keyringService, account, token)
+}
+func loadToken(account string) (string, error) {
+	return keyring.Get(keyringService, account)
+}
+func deleteToken(account string) error {
+	if err := keyring.Delete(keyringService, account); err != nil && !errors.Is(err, keyring.ErrNotFound) {
 		return err
 	}
 	return nil
