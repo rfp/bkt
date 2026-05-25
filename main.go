@@ -23,7 +23,10 @@ import (
 	"golang.org/x/term"
 )
 
-const keyringService = "bkt"
+const (
+	keyringService   = "bkt"
+	defaultAPIBaseURL = "https://api.bitbucket.org/2.0"
+)
 
 var (
 	keyringSet    = keyring.Set
@@ -150,7 +153,11 @@ func auth(cfg Config, args []string) {
 	}
 	switch args[0] {
 	case "login":
-		cfg.APIBaseURL = defaultString(cfg.APIBaseURL, "https://api.bitbucket.org/2.0")
+		var err error
+		cfg.APIBaseURL, err = validateAPIBaseURL(cfg.APIBaseURL)
+		if err != nil {
+			fatal(err)
+		}
 		cfg.Email = readLine("Atlassian account email: ")
 		cfg.Username = readLine("Bitbucket username, optional: ")
 		token, err := readSecret("API token: ")
@@ -162,7 +169,8 @@ func auth(cfg Config, args []string) {
 		if cfg.Email == "" || cfg.Token == "" {
 			fatal(errors.New("email and token are required"))
 		}
-		u, err := newClient(cfg).CurrentUser()
+		client := clientOrFatal(cfg)
+		u, err := client.CurrentUser()
 		if err != nil {
 			fatal(err)
 		}
@@ -178,7 +186,8 @@ func auth(cfg Config, args []string) {
 		fmt.Printf("Logged in as %s (%s)\n", u.DisplayName, cfg.Email)
 	case "status":
 		ensureAuth(cfg)
-		u, err := newClient(cfg).CurrentUser()
+		client := clientOrFatal(cfg)
+		u, err := client.CurrentUser()
 		if err != nil {
 			fatal(err)
 		}
@@ -210,7 +219,7 @@ func repo(cfg Config, args []string) {
 	if err != nil {
 		fatal(err)
 	}
-	r, err := newClient(cfg).Repo(rc.Workspace, rc.Slug)
+	r, err := clientOrFatal(cfg).Repo(rc.Workspace, rc.Slug)
 	if err != nil {
 		fatal(err)
 	}
@@ -253,7 +262,7 @@ func prList(cfg Config, args []string) {
 	if err != nil {
 		fatal(err)
 	}
-	prs, err := newClient(cfg).ListPRs(rc.Workspace, rc.Slug, *state)
+	prs, err := clientOrFatal(cfg).ListPRs(rc.Workspace, rc.Slug, *state)
 	if err != nil {
 		fatal(err)
 	}
@@ -279,7 +288,7 @@ func prView(cfg Config, args []string) {
 	if err != nil {
 		fatal(err)
 	}
-	pr, err := newClient(cfg).PR(rc.Workspace, rc.Slug, id)
+	pr, err := clientOrFatal(cfg).PR(rc.Workspace, rc.Slug, id)
 	if err != nil {
 		fatal(err)
 	}
@@ -319,7 +328,7 @@ func prCreate(cfg Config, args []string) {
 	if *desc == "" {
 		*desc = readLine("Description: ")
 	}
-	pr, err := newClient(cfg).CreatePR(rc.Workspace, rc.Slug, *title, *desc, *source, *target)
+	pr, err := clientOrFatal(cfg).CreatePR(rc.Workspace, rc.Slug, *title, *desc, *source, *target)
 	if err != nil {
 		fatal(err)
 	}
@@ -337,7 +346,7 @@ func prCheckout(cfg Config, args []string) {
 	if err != nil {
 		fatal(err)
 	}
-	pr, err := newClient(cfg).PR(rc.Workspace, rc.Slug, id)
+	pr, err := clientOrFatal(cfg).PR(rc.Workspace, rc.Slug, id)
 	if err != nil {
 		fatal(err)
 	}
@@ -356,7 +365,7 @@ func prApprove(cfg Config, args []string) {
 	if err != nil {
 		fatal(err)
 	}
-	if err := newClient(cfg).ApprovePR(rc.Workspace, rc.Slug, id); err != nil {
+	if err := clientOrFatal(cfg).ApprovePR(rc.Workspace, rc.Slug, id); err != nil {
 		fatal(err)
 	}
 	fmt.Printf("Approved PR #%d\n", id)
@@ -372,7 +381,7 @@ func prMerge(cfg Config, args []string) {
 	if err != nil {
 		fatal(err)
 	}
-	if err := newClient(cfg).MergePR(rc.Workspace, rc.Slug, id, *msg); err != nil {
+	if err := clientOrFatal(cfg).MergePR(rc.Workspace, rc.Slug, id, *msg); err != nil {
 		fatal(err)
 	}
 	fmt.Printf("Merged PR #%d\n", id)
@@ -392,7 +401,7 @@ func pipeline(cfg Config, args []string) {
 		if err != nil {
 			fatal(err)
 		}
-		pipes, err := newClient(cfg).ListPipelines(rc.Workspace, rc.Slug)
+		pipes, err := clientOrFatal(cfg).ListPipelines(rc.Workspace, rc.Slug)
 		if err != nil {
 			fatal(err)
 		}
@@ -422,7 +431,7 @@ func pipeline(cfg Config, args []string) {
 		if err != nil {
 			fatal(err)
 		}
-		p, err := newClient(cfg).RunPipeline(rc.Workspace, rc.Slug, *branch)
+		p, err := clientOrFatal(cfg).RunPipeline(rc.Workspace, rc.Slug, *branch)
 		if err != nil {
 			fatal(err)
 		}
@@ -436,8 +445,49 @@ func pipeline(cfg Config, args []string) {
 	}
 }
 
-func newClient(cfg Config) *Client {
-	return &Client{BaseURL: strings.TrimRight(defaultString(cfg.APIBaseURL, "https://api.bitbucket.org/2.0"), "/"), Email: cfg.Email, Token: cfg.Token, HTTP: &http.Client{Timeout: 30 * time.Second}}
+func clientOrFatal(cfg Config) *Client {
+	client, err := newClient(cfg)
+	if err != nil {
+		fatal(err)
+	}
+	return client
+}
+
+func newClient(cfg Config) (*Client, error) {
+	baseURL, err := validateAPIBaseURL(cfg.APIBaseURL)
+	if err != nil {
+		return nil, err
+	}
+	return &Client{BaseURL: baseURL, Email: cfg.Email, Token: cfg.Token, HTTP: &http.Client{Timeout: 30 * time.Second}}, nil
+}
+
+func validateAPIBaseURL(raw string) (string, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		raw = defaultAPIBaseURL
+	}
+
+	parsed, err := url.Parse(raw)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return "", fmt.Errorf("invalid API base URL: %q", raw)
+	}
+
+	if parsed.Scheme != "https" {
+		return "", fmt.Errorf("invalid API base URL %q: only https is allowed", raw)
+	}
+	if parsed.Host != "api.bitbucket.org" {
+		return "", fmt.Errorf("invalid API base URL %q: only api.bitbucket.org is supported", raw)
+	}
+
+	path := strings.TrimRight(parsed.EscapedPath(), "/")
+	if path != "/2.0" {
+		return "", fmt.Errorf("invalid API base URL %q: expected path /2.0", raw)
+	}
+	if parsed.RawQuery != "" || parsed.Fragment != "" {
+		return "", fmt.Errorf("invalid API base URL %q: query strings and fragments are not allowed", raw)
+	}
+
+	return defaultAPIBaseURL, nil
 }
 
 func (c *Client) do(method, path string, body any, out any) error {
@@ -599,7 +649,7 @@ func configPath() (string, error) {
 	return filepath.Join(base, "bkt", "config"), nil
 }
 func loadConfig() (Config, error) {
-	cfg := Config{APIBaseURL: "https://api.bitbucket.org/2.0"}
+	cfg := Config{APIBaseURL: defaultAPIBaseURL}
 	p, err := configPath()
 	if err != nil {
 		return cfg, err
@@ -642,6 +692,11 @@ func loadConfig() (Config, error) {
 		return cfg, err
 	}
 
+	cfg.APIBaseURL, err = validateAPIBaseURL(cfg.APIBaseURL)
+	if err != nil {
+		return cfg, err
+	}
+
 	if cfg.Email == "" {
 		return cfg, nil
 	}
@@ -668,6 +723,11 @@ func loadConfig() (Config, error) {
 	return cfg, nil
 }
 func saveConfig(cfg Config) error {
+	var err error
+	cfg.APIBaseURL, err = validateAPIBaseURL(cfg.APIBaseURL)
+	if err != nil {
+		return err
+	}
 	p, err := configPath()
 	if err != nil {
 		return err
