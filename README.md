@@ -148,6 +148,26 @@ bkt pipeline list --json
 bkt pipeline run --branch main
 ```
 
+## 🧯 Write operation confirmations
+
+Commands that change remote state ask for confirmation by default:
+
+```bash
+bkt pr approve 123
+bkt pr merge 123
+bkt pipeline run --branch main
+```
+
+For scripts and automation, pass `--yes` explicitly:
+
+```bash
+bkt pr approve 123 --yes
+bkt pr merge 123 --yes
+bkt pipeline run --branch main --yes
+```
+
+The default answer is No.
+
 ## 🧠 How repo detection works
 
 Most commands expect to be run inside a local Git repository whose `origin` remote points to Bitbucket Cloud.
