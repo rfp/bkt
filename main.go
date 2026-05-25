@@ -25,6 +25,12 @@ import (
 
 const keyringService = "bkt"
 
+var (
+	keyringSet    = keyring.Set
+	keyringGet    = keyring.Get
+	keyringDelete = keyring.Delete
+)
+
 type Config struct {
 	Email      string
 	Username   string
@@ -683,13 +689,13 @@ func deleteConfig() error {
 	return nil
 }
 func saveToken(account, token string) error {
-	return keyring.Set(keyringService, account, token)
+	return keyringSet(keyringService, account, token)
 }
 func loadToken(account string) (string, error) {
-	return keyring.Get(keyringService, account)
+	return keyringGet(keyringService, account)
 }
 func deleteToken(account string) error {
-	if err := keyring.Delete(keyringService, account); err != nil && !errors.Is(err, keyring.ErrNotFound) {
+	if err := keyringDelete(keyringService, account); err != nil && !errors.Is(err, keyring.ErrNotFound) {
 		return err
 	}
 	return nil
