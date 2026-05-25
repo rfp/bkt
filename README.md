@@ -74,15 +74,21 @@ bkt auth login
 
 The token prompt uses hidden terminal input, so the API token is not echoed while typing.
 
-The MVP currently stores config here:
+`bkt` stores non-sensitive config here:
 
 ```text
 ~/.config/bkt/config
 ```
 
-with `0600` permissions.
+That file contains values such as email, username, workspace, and API base URL. It should **not** contain `token=`.
 
-> ⚠️ Next hardening step: replace plain config token storage with macOS Keychain, Linux Secret Service, and Windows Credential Manager.
+The API token is stored in the operating system keychain:
+
+- macOS: Keychain
+- Linux: Secret Service / libsecret
+- Windows: Credential Manager
+
+If the token cannot be stored in the keychain, login fails. There is intentionally no plain-text token fallback.
 
 ## 🧭 Commands
 
@@ -178,7 +184,7 @@ But before splitting files, the project should earn the complexity.
 
 ## 🗺 Roadmap
 
-- [ ] Secure credential storage via OS keychain.
+- [x] Secure credential storage via OS keychain.
 - [ ] Split code into packages.
 - [ ] Add tests.
 - [ ] Add GitHub Actions.
