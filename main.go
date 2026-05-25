@@ -148,10 +148,10 @@ Usage:
   bkt pr view <id> [--json] [--web]
   bkt pr create [--title T] [--description D] [--source B] [--target main]
   bkt pr checkout <id>
-  bkt pr approve <id>
-  bkt pr merge <id> [--message M]
+  bkt pr approve <id> [--yes]
+  bkt pr merge <id> [--message M] [--yes]
   bkt pipeline list [--json]
-  bkt pipeline run [--branch B] [--json]
+  bkt pipeline run [--branch B] [--json] [--yes]
 `)
 }
 
@@ -376,11 +376,19 @@ func prCheckout(cfg Config, args []string) {
 }
 
 func prApprove(cfg Config, args []string) {
-	id := requireID(args)
+	fs := flag.NewFlagSet("pr approve", flag.ExitOnError)
+	yes := fs.Bool("yes", false, "skip confirmation")
+	_ = fs.Parse(args)
+	id := requireID(fs.Args())
+
 	ensureAuth(cfg)
 	rc, err := detectRepo("origin")
 	if err != nil {
 		fatal(err)
+	}
+	if !*yes && !confirmAction(fmt.Sprintf("Approve PR #%d in %s/%s?", id, rc.Workspace, rc.Slug)) {
+		fmt.Println("Aborted")
+		return
 	}
 	if err := clientOrFatal(cfg).ApprovePR(rc.Workspace, rc.Slug, id); err != nil {
 		fatal(err)
@@ -391,6 +399,7 @@ func prApprove(cfg Config, args []string) {
 func prMerge(cfg Config, args []string) {
 	fs := flag.NewFlagSet("pr merge", flag.ExitOnError)
 	msg := fs.String("message", "", "merge message")
+	yes := fs.Bool("yes", false, "skip confirmation")
 	_ = fs.Parse(args)
 	id := requireID(fs.Args())
 
@@ -398,6 +407,14 @@ func prMerge(cfg Config, args []string) {
 	rc, err := detectRepo("origin")
 	if err != nil {
 		fatal(err)
+	}
+	pr, err := clientOrFatal(cfg).PR(rc.Workspace, rc.Slug, id)
+	if err != nil {
+		fatal(err)
+	}
+	if !*yes && !confirmAction(fmt.Sprintf("Merge PR #%d (%s) into %s in %s/%s?", id, pr.Title, pr.Destination.Branch.Name, rc.Workspace, rc.Slug)) {
+		fmt.Println("Aborted")
+		return
 	}
 	if err := clientOrFatal(cfg).MergePR(rc.Workspace, rc.Slug, id, *msg); err != nil {
 		fatal(err)
@@ -439,6 +456,7 @@ func pipeline(cfg Config, args []string) {
 		fs := flag.NewFlagSet("pipeline run", flag.ExitOnError)
 		branch := fs.String("branch", "", "branch to run")
 		jsonOut := fs.Bool("json", false, "JSON output")
+		yes := fs.Bool("yes", false, "skip confirmation")
 		_ = fs.Parse(args[1:])
 
 		ensureAuth(cfg)
@@ -452,6 +470,10 @@ func pipeline(cfg Config, args []string) {
 		rc, err := detectRepo("origin")
 		if err != nil {
 			fatal(err)
+		}
+		if !*yes && !confirmAction(fmt.Sprintf("Run pipeline for branch %s in %s/%s?", *branch, rc.Workspace, rc.Slug)) {
+			fmt.Println("Aborted")
+			return
 		}
 		p, err := clientOrFatal(cfg).RunPipeline(rc.Workspace, rc.Slug, *branch)
 		if err != nil {
@@ -902,6 +924,11 @@ func ensureAuth(cfg Config) {
 	if cfg.Email == "" || cfg.Token == "" {
 		fatal(errors.New("not authenticated; run: bkt auth login"))
 	}
+}
+
+func confirmAction(prompt string) bool {
+	answer := strings.ToLower(readLine(prompt + " [y/N] "))
+	return answer == "y" || answer == "yes"
 }
 
 func readLine(prompt string) string {
