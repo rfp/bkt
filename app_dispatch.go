@@ -14,6 +14,9 @@ func (a *App) Run(args []string) error {
 	switch args[0] {
 	case "auth":
 		return a.Auth(args[1:])
+	case "repo":
+		repo(a.Config, args[1:])
+		return nil
 	case "pr":
 		return a.PR(args[1:])
 	case "pipeline":
@@ -92,7 +95,8 @@ func (a *App) PR(args []string) error {
 		}
 		return nil
 	default:
-		return fmt.Errorf("unsupported App PR subcommand: %s", args[0])
+		pr(a.Config, args)
+		return nil
 	}
 }
 
@@ -116,7 +120,8 @@ func (a *App) Pipeline(args []string) error {
 		}
 		return nil
 	default:
-		return fmt.Errorf("unsupported App pipeline subcommand: %s", args[0])
+		pipeline(a.Config, args)
+		return nil
 	}
 }
 
