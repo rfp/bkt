@@ -112,6 +112,24 @@ Bitbucket Data Center support may be added later, but it will require explicit c
 
 ## 🧭 Commands
 
+### Version
+
+```bash
+bkt version
+bkt --version
+bkt -v
+```
+
+Development builds report:
+
+```text
+bkt version dev
+commit unknown
+built unknown
+```
+
+Release builds can inject version metadata with Go linker flags.
+
 ### Auth
 
 ```bash
@@ -243,12 +261,13 @@ But before splitting files, the project should earn the complexity.
 - [ ] Split code into packages.
 - [x] Add tests.
 - [x] Add GitHub Actions.
+- [ ] Add release builds.
+- [ ] Add Homebrew tap.
 - [ ] Add `bkt repo clone`.
 - [ ] Add `bkt pr comment`.
 - [ ] Add `bkt pr diff`.
 - [ ] Add `bkt pipeline view`.
 - [ ] Add `bkt pipeline logs`.
-- [ ] Add Homebrew tap and release builds.
 - [ ] Investigate Bitbucket Data Center support.
 
 ## 🧪 MVP warning label
