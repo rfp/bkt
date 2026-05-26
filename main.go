@@ -26,13 +26,21 @@ import (
 const (
 	keyringService    = "bkt"
 	defaultAPIBaseURL = "https://api.bitbucket.org/2.0"
+	maxAPIErrorBody   = 500
 )
 
 var (
 	keyringSet    = keyring.Set
 	keyringGet    = keyring.Get
 	keyringDelete = keyring.Delete
+	inputLine     = readLine
+	inputSecret   = readSecret
+	newUserClient = func(cfg Config) (userClient, error) { return newClient(cfg) }
 )
+
+type userClient interface {
+	CurrentUser() (User, error)
+}
 
 type Config struct {
 	Email      string
@@ -162,40 +170,9 @@ func auth(cfg Config, args []string) {
 
 	switch args[0] {
 	case "login":
-		var err error
-		cfg.APIBaseURL, err = validateAPIBaseURL(cfg.APIBaseURL)
-		if err != nil {
+		if err := authLogin(cfg); err != nil {
 			fatal(err)
 		}
-
-		cfg.Email = readLine("Atlassian account email: ")
-		cfg.Username = readLine("Bitbucket username, optional: ")
-		token, err := readSecret("API token: ")
-		if err != nil {
-			fatal(err)
-		}
-		cfg.Token = token
-		cfg.Workspace = readLine("Default workspace, optional: ")
-
-		if cfg.Email == "" || cfg.Token == "" {
-			fatal(errors.New("email and token are required"))
-		}
-
-		client := clientOrFatal(cfg)
-		u, err := client.CurrentUser()
-		if err != nil {
-			fatal(err)
-		}
-		if cfg.Username == "" {
-			cfg.Username = u.Nickname
-		}
-		if err := saveToken(cfg.Email, cfg.Token); err != nil {
-			fatal(fmt.Errorf("could not store API token in keychain: %w", err))
-		}
-		if err := saveConfig(cfg); err != nil {
-			fatal(err)
-		}
-		fmt.Printf("Logged in as %s (%s)\n", u.DisplayName, cfg.Email)
 	case "status":
 		ensureAuth(cfg)
 		u, err := clientOrFatal(cfg).CurrentUser()
@@ -204,18 +181,63 @@ func auth(cfg Config, args []string) {
 		}
 		fmt.Printf("Logged in as %s\nEmail: %s\nUsername: %s\nAPI: %s\n", u.DisplayName, cfg.Email, cfg.Username, cfg.APIBaseURL)
 	case "logout":
-		if cfg.Email != "" {
-			if err := deleteToken(cfg.Email); err != nil {
-				fatal(fmt.Errorf("could not remove API token from keychain: %w", err))
-			}
-		}
-		if err := deleteConfig(); err != nil {
+		if err := authLogout(cfg); err != nil {
 			fatal(err)
 		}
 		fmt.Println("Logged out")
 	default:
 		fatal(fmt.Errorf("unknown auth subcommand: %s", args[0]))
 	}
+}
+
+func authLogin(cfg Config) error {
+	var err error
+	cfg.APIBaseURL, err = validateAPIBaseURL(cfg.APIBaseURL)
+	if err != nil {
+		return err
+	}
+
+	cfg.Email = inputLine("Atlassian account email: ")
+	cfg.Username = inputLine("Bitbucket username, optional: ")
+	token, err := inputSecret("API token: ")
+	if err != nil {
+		return err
+	}
+	cfg.Token = token
+	cfg.Workspace = inputLine("Default workspace, optional: ")
+
+	if cfg.Email == "" || cfg.Token == "" {
+		return errors.New("email and token are required")
+	}
+
+	client, err := newUserClient(cfg)
+	if err != nil {
+		return err
+	}
+	u, err := client.CurrentUser()
+	if err != nil {
+		return err
+	}
+	if cfg.Username == "" {
+		cfg.Username = u.Nickname
+	}
+	if err := saveToken(cfg.Email, cfg.Token); err != nil {
+		return fmt.Errorf("could not store API token in keychain: %w", err)
+	}
+	if err := saveConfig(cfg); err != nil {
+		return err
+	}
+	fmt.Printf("Logged in as %s (%s)\n", u.DisplayName, cfg.Email)
+	return nil
+}
+
+func authLogout(cfg Config) error {
+	if cfg.Email != "" {
+		if err := deleteToken(cfg.Email); err != nil {
+			return fmt.Errorf("could not remove API token from keychain: %w", err)
+		}
+	}
+	return deleteConfig()
 }
 
 func repo(cfg Config, args []string) {
@@ -340,10 +362,10 @@ func prCreate(cfg Config, args []string) {
 		}
 	}
 	if *title == "" {
-		*title = readLine("Title: ")
+		*title = inputLine("Title: ")
 	}
 	if *desc == "" {
-		*desc = readLine("Description: ")
+		*desc = inputLine("Description: ")
 	}
 	pr, err := clientOrFatal(cfg).CreatePR(rc.Workspace, rc.Slug, *title, *desc, *source, *target)
 	if err != nil {
@@ -368,8 +390,13 @@ func prCheckout(cfg Config, args []string) {
 		fatal(err)
 	}
 	branch := pr.Source.Branch.Name
+	if err := validateBranchName(branch); err != nil {
+		fatal(err)
+	}
 	fmt.Println("Fetching", branch)
-	_ = run("git", "fetch", "origin", branch)
+	if err := run("git", "fetch", "origin", branch); err != nil {
+		fatal(fmt.Errorf("git fetch failed: %w", err))
+	}
 	if err := run("git", "checkout", branch); err != nil {
 		fatal(err)
 	}
@@ -408,7 +435,8 @@ func prMerge(cfg Config, args []string) {
 	if err != nil {
 		fatal(err)
 	}
-	pr, err := clientOrFatal(cfg).PR(rc.Workspace, rc.Slug, id)
+	client := clientOrFatal(cfg)
+	pr, err := client.PR(rc.Workspace, rc.Slug, id)
 	if err != nil {
 		fatal(err)
 	}
@@ -416,7 +444,7 @@ func prMerge(cfg Config, args []string) {
 		fmt.Println("Aborted")
 		return
 	}
-	if err := clientOrFatal(cfg).MergePR(rc.Workspace, rc.Slug, id, *msg); err != nil {
+	if err := client.MergePR(rc.Workspace, rc.Slug, id, *msg); err != nil {
 		fatal(err)
 	}
 	fmt.Printf("Merged PR #%d\n", id)
@@ -533,6 +561,22 @@ func validateAPIBaseURL(raw string) (string, error) {
 	return defaultAPIBaseURL, nil
 }
 
+func validateBranchName(branch string) error {
+	if branch == "" {
+		return errors.New("unsafe branch name: branch name is empty")
+	}
+	if branch != strings.TrimSpace(branch) {
+		return fmt.Errorf("unsafe branch name %q: leading or trailing whitespace is not allowed", branch)
+	}
+	if strings.HasPrefix(branch, "-") {
+		return fmt.Errorf("unsafe branch name %q: branch names starting with '-' are not allowed", branch)
+	}
+	if strings.ContainsAny(branch, "\x00\n\r") {
+		return fmt.Errorf("unsafe branch name %q: control characters are not allowed", branch)
+	}
+	return nil
+}
+
 func (c *Client) requestURL(path string) (string, error) {
 	if !strings.HasPrefix(path, "http://") && !strings.HasPrefix(path, "https://") {
 		return c.BaseURL + path, nil
@@ -599,12 +643,26 @@ func (c *Client) do(method, path string, body any, out any) error {
 
 	data, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("bitbucket API error %d: %s", resp.StatusCode, strings.TrimSpace(string(data)))
+		return formatAPIError(resp.StatusCode, data, c.Token)
 	}
 	if out == nil || len(data) == 0 {
 		return nil
 	}
 	return json.Unmarshal(data, out)
+}
+
+func formatAPIError(statusCode int, body []byte, token string) error {
+	message := strings.TrimSpace(string(body))
+	if token != "" {
+		message = strings.ReplaceAll(message, token, "[REDACTED]")
+	}
+	if len(message) > maxAPIErrorBody {
+		message = message[:maxAPIErrorBody] + "..."
+	}
+	if message == "" {
+		return fmt.Errorf("bitbucket API error %d", statusCode)
+	}
+	return fmt.Errorf("bitbucket API error %d: %s", statusCode, message)
 }
 
 func (c *Client) CurrentUser() (User, error) {
@@ -927,7 +985,7 @@ func ensureAuth(cfg Config) {
 }
 
 func confirmAction(prompt string) bool {
-	answer := strings.ToLower(readLine(prompt + " [y/N] "))
+	answer := strings.ToLower(inputLine(prompt + " [y/N] "))
 	return answer == "y" || answer == "yes"
 }
 
