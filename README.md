@@ -39,6 +39,22 @@ If you are looking for a pristine enterprise SDK, this is not that. Yet.
 
 If you are looking for a useful little Bitbucket CLI seedling, welcome. 🌱
 
+## 📡 Project status
+
+`bkt` is currently in **early MVP / traction-check mode**.
+
+The core is usable, tested and releasable, but the next features will depend on real feedback rather than a giant speculative roadmap.
+
+Right now, the most useful feedback is:
+
+- does it work with your real Bitbucket Cloud repositories?
+- which command do you miss first?
+- did authentication or setup feel awkward?
+- did Homebrew or the install script work for you?
+- did any command feel unsafe, surprising or too noisy?
+
+If you try it and something feels off, please open an issue. Small, concrete reports are more useful than grand feature essays.
+
 ## 🚀 Quick start
 
 Install with Homebrew:
@@ -291,13 +307,20 @@ But before splitting files, the project should earn the complexity.
 
 ## 🗺 Roadmap
 
+The roadmap is intentionally small until there are real users asking for real things.
+
+Done:
+
 - [x] Secure credential storage via OS keychain.
-- [ ] Split code into packages.
 - [x] Add tests.
 - [x] Add GitHub Actions.
 - [x] Add release builds.
 - [x] Add Homebrew tap.
 - [x] Add Linux/macOS install script.
+
+Possible next steps, depending on traction:
+
+- [ ] Split code into packages.
 - [ ] Add deb/rpm packages.
 - [ ] Add Scoop manifest.
 - [ ] Add `bkt repo clone`.
