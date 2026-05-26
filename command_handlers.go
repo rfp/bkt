@@ -36,7 +36,7 @@ func runPRApproveCommand(cfg Config, args []string, deps writeCommandDeps) (writ
 
 	fs := flag.NewFlagSet("pr approve", flag.ContinueOnError)
 	yes := fs.Bool("yes", false, "skip confirmation")
-	if err := fs.Parse(args); err != nil {
+	if err := fs.Parse(reorderFlagsBeforePositionals(args)); err != nil {
 		return writeCommandResult{}, err
 	}
 	id, err := requireIDE(fs.Args())
@@ -70,7 +70,7 @@ func runPRMergeCommand(cfg Config, args []string, deps writeCommandDeps) (writeC
 	fs := flag.NewFlagSet("pr merge", flag.ContinueOnError)
 	msg := fs.String("message", "", "merge message")
 	yes := fs.Bool("yes", false, "skip confirmation")
-	if err := fs.Parse(args); err != nil {
+	if err := fs.Parse(reorderFlagsBeforePositionals(args)); err != nil {
 		return writeCommandResult{}, err
 	}
 	id, err := requireIDE(fs.Args())
@@ -112,7 +112,7 @@ func runPipelineRunCommand(cfg Config, args []string, deps writeCommandDeps) (wr
 	yes := fs.Bool("yes", false, "skip confirmation")
 	jsonOut := fs.Bool("json", false, "JSON output")
 	_ = jsonOut
-	if err := fs.Parse(args); err != nil {
+	if err := fs.Parse(reorderFlagsBeforePositionals(args)); err != nil {
 		return writeCommandResult{}, err
 	}
 
@@ -141,6 +141,34 @@ func runPipelineRunCommand(cfg Config, args []string, deps writeCommandDeps) (wr
 		return writeCommandResult{}, err
 	}
 	return writeCommandResult{Performed: true, Message: fmt.Sprintf("Started pipeline #%d for branch %s", pipeline.BuildNumber, *branch)}, nil
+}
+
+func reorderFlagsBeforePositionals(args []string) []string {
+	flags := []string{}
+	positionals := []string{}
+
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		if arg == "--" {
+			positionals = append(positionals, args[i+1:]...)
+			break
+		}
+		if arg == "--yes" || arg == "-yes" || arg == "--json" || arg == "-json" {
+			flags = append(flags, arg)
+			continue
+		}
+		if arg == "--message" || arg == "-message" || arg == "--branch" || arg == "-branch" {
+			flags = append(flags, arg)
+			if i+1 < len(args) {
+				flags = append(flags, args[i+1])
+				i++
+			}
+			continue
+		}
+		positionals = append(positionals, arg)
+	}
+
+	return append(flags, positionals...)
 }
 
 func requireIDE(args []string) (int, error) {
