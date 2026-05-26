@@ -120,29 +120,14 @@ type RepoRef struct {
 }
 
 func main() {
-	if len(os.Args) < 2 {
-		help()
-		return
-	}
-
 	cfg, err := loadConfig()
 	if err != nil {
 		fatal(err)
 	}
 
-	switch os.Args[1] {
-	case "auth":
-		auth(cfg, os.Args[2:])
-	case "repo":
-		repo(cfg, os.Args[2:])
-	case "pr":
-		pr(cfg, os.Args[2:])
-	case "pipeline":
-		pipeline(cfg, os.Args[2:])
-	case "help", "--help", "-h":
-		help()
-	default:
-		fatal(fmt.Errorf("unknown command: %s", os.Args[1]))
+	app := NewDefaultApp(cfg)
+	if err := app.Run(os.Args[1:]); err != nil {
+		fatal(err)
 	}
 }
 
