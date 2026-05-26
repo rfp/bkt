@@ -24,8 +24,13 @@ type GitRunner interface {
 	Run(name string, args ...string) error
 }
 
+type APIClient interface {
+	userClient
+	writeCommandClient
+}
+
 type ClientFactory interface {
-	New(cfg Config) (*Client, error)
+	New(cfg Config) (APIClient, error)
 }
 
 type App struct {
@@ -96,7 +101,7 @@ func (ShellGitRunner) Run(name string, args ...string) error {
 
 type BitbucketClientFactory struct{}
 
-func (BitbucketClientFactory) New(cfg Config) (*Client, error) {
+func (BitbucketClientFactory) New(cfg Config) (APIClient, error) {
 	return newClient(cfg)
 }
 
