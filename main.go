@@ -393,11 +393,12 @@ func prCheckout(cfg Config, args []string) {
 	if err := validateBranchName(branch); err != nil {
 		fatal(err)
 	}
-	fmt.Println("Fetching", branch)
+	localBranch := localPRBranchName(id)
+	fmt.Printf("Fetching %s and checking out %s\n", branch, localBranch)
 	if err := run("git", "fetch", "origin", branch); err != nil {
 		fatal(fmt.Errorf("git fetch failed: %w", err))
 	}
-	if err := run("git", "checkout", branch); err != nil {
+	if err := run("git", "checkout", "-B", localBranch, "FETCH_HEAD"); err != nil {
 		fatal(err)
 	}
 }
@@ -575,6 +576,10 @@ func validateBranchName(branch string) error {
 		return fmt.Errorf("unsafe branch name %q: control characters are not allowed", branch)
 	}
 	return nil
+}
+
+func localPRBranchName(id int) string {
+	return fmt.Sprintf("pr/%d", id)
 }
 
 func (c *Client) requestURL(path string) (string, error) {
