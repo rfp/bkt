@@ -4,6 +4,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"strconv"
 )
 
 type writeCommandClient interface {
@@ -146,7 +147,7 @@ func requireIDE(args []string) (int, error) {
 	if len(args) != 1 {
 		return 0, errors.New("missing numeric id")
 	}
-	id, err := strconvAtoi(args[0])
+	id, err := strconv.Atoi(args[0])
 	if err != nil {
 		return 0, err
 	}
@@ -159,5 +160,3 @@ func ensureAuthE(cfg Config) error {
 	}
 	return nil
 }
-
-var strconvAtoi = strconv.Atoi
