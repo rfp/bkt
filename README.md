@@ -237,6 +237,19 @@ Example vibe:
 bkt pr list --json | jq '.[] | {id, title, state}'
 ```
 
+## 📦 Releases
+
+Releases are built with GoReleaser.
+
+To create a release, tag `main` with a version tag:
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+The release workflow runs tests first, then builds archives for macOS, Linux and Windows, with checksums attached to the GitHub Release.
+
 ## 🛠 Current shape
 
 Right now, this is deliberately a **single-file Go CLI**.
@@ -261,7 +274,7 @@ But before splitting files, the project should earn the complexity.
 - [ ] Split code into packages.
 - [x] Add tests.
 - [x] Add GitHub Actions.
-- [ ] Add release builds.
+- [x] Add release builds.
 - [ ] Add Homebrew tap.
 - [ ] Add `bkt repo clone`.
 - [ ] Add `bkt pr comment`.
