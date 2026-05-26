@@ -44,6 +44,15 @@ func (f *fakeKeyring) delete(service, account string) error {
 	return nil
 }
 
+type fakeUserClient struct {
+	user User
+	err  error
+}
+
+func (f fakeUserClient) CurrentUser() (User, error) {
+	return f.user, f.err
+}
+
 func withTempConfigDir(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
@@ -94,6 +103,39 @@ func withStdin(t *testing.T, input string) {
 	})
 }
 
+func withInputFuncs(t *testing.T, lines []string, secret string, secretErr error) {
+	t.Helper()
+	oldInputLine := inputLine
+	oldInputSecret := inputSecret
+	lineIndex := 0
+
+	inputLine = func(prompt string) string {
+		if lineIndex >= len(lines) {
+			t.Fatalf("unexpected inputLine call for prompt %q", prompt)
+		}
+		value := lines[lineIndex]
+		lineIndex++
+		return value
+	}
+	inputSecret = func(prompt string) (string, error) {
+		return secret, secretErr
+	}
+
+	t.Cleanup(func() {
+		inputLine = oldInputLine
+		inputSecret = oldInputSecret
+	})
+}
+
+func withFakeUserClient(t *testing.T, client userClient, err error) {
+	t.Helper()
+	old := newUserClient
+	newUserClient = func(cfg Config) (userClient, error) {
+		return client, err
+	}
+	t.Cleanup(func() { newUserClient = old })
+}
+
 func TestConfirmActionDefaultsToNo(t *testing.T) {
 	withStdin(t, "\n")
 
@@ -122,6 +164,85 @@ func TestConfirmActionAcceptsOnlyYes(t *testing.T) {
 				t.Fatalf("expected %t, got %t", tt.want, got)
 			}
 		})
+	}
+}
+
+func TestAuthLoginUsesSecretInputAndStoresTokenInKeyring(t *testing.T) {
+	dir := withTempConfigDir(t)
+	fake := withFakeKeyring(t)
+	withInputFuncs(t, []string{"rui@example.com", "", "workspace"}, "secret-token", nil)
+	withFakeUserClient(t, fakeUserClient{user: User{DisplayName: "Rui", Nickname: "rfp"}}, nil)
+
+	if err := authLogin(Config{}); err != nil {
+		t.Fatalf("authLogin returned error: %v", err)
+	}
+
+	storedToken, err := fake.get(keyringService, "rui@example.com")
+	if err != nil {
+		t.Fatalf("expected token in fake keyring: %v", err)
+	}
+	if storedToken != "secret-token" {
+		t.Fatalf("expected keyring token %q, got %q", "secret-token", storedToken)
+	}
+
+	content, err := os.ReadFile(filepath.Join(dir, "config"))
+	if err != nil {
+		t.Fatalf("could not read config: %v", err)
+	}
+	configText := string(content)
+	if strings.Contains(configText, "token=") || strings.Contains(configText, "secret-token") {
+		t.Fatalf("config must not contain token data, got:\n%s", configText)
+	}
+	if !strings.Contains(configText, "username=rfp") {
+		t.Fatalf("expected username from Bitbucket user nickname, got:\n%s", configText)
+	}
+}
+
+func TestAuthLoginFailsWhenSecretInputFails(t *testing.T) {
+	withTempConfigDir(t)
+	withFakeKeyring(t)
+	withInputFuncs(t, []string{"rui@example.com", "rfp"}, "", errors.New("not a terminal"))
+	withFakeUserClient(t, fakeUserClient{user: User{DisplayName: "Rui", Nickname: "rfp"}}, nil)
+
+	if err := authLogin(Config{}); err == nil {
+		t.Fatal("expected authLogin to fail when secret input fails")
+	}
+}
+
+func TestAuthLoginFailsWhenKeyringStorageFails(t *testing.T) {
+	withTempConfigDir(t)
+	withInputFuncs(t, []string{"rui@example.com", "rfp", "workspace"}, "secret-token", nil)
+	withFakeUserClient(t, fakeUserClient{user: User{DisplayName: "Rui", Nickname: "rfp"}}, nil)
+
+	oldSet := keyringSet
+	keyringSet = func(service, account, secret string) error {
+		return errors.New("keychain unavailable")
+	}
+	t.Cleanup(func() { keyringSet = oldSet })
+
+	if err := authLogin(Config{}); err == nil {
+		t.Fatal("expected authLogin to fail when keyring storage fails")
+	}
+}
+
+func TestAuthLogoutRemovesConfigAndToken(t *testing.T) {
+	dir := withTempConfigDir(t)
+	fake := withFakeKeyring(t)
+	if err := fake.set(keyringService, "rui@example.com", "secret-token"); err != nil {
+		t.Fatalf("could not seed fake keyring: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "config"), []byte("email=rui@example.com\n"), 0600); err != nil {
+		t.Fatalf("could not write config: %v", err)
+	}
+
+	if err := authLogout(Config{Email: "rui@example.com"}); err != nil {
+		t.Fatalf("authLogout returned error: %v", err)
+	}
+	if _, err := fake.get(keyringService, "rui@example.com"); !errors.Is(err, keyring.ErrNotFound) {
+		t.Fatalf("expected token to be removed from keyring, got: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "config")); !os.IsNotExist(err) {
+		t.Fatalf("expected config to be removed, got: %v", err)
 	}
 }
 
@@ -167,6 +288,57 @@ func TestNewClientRejectsInvalidAPIBaseURL(t *testing.T) {
 	_, err := newClient(Config{APIBaseURL: "https://example.com/2.0"})
 	if err == nil {
 		t.Fatal("expected newClient to reject non-Bitbucket API host")
+	}
+}
+
+func TestValidateBranchName(t *testing.T) {
+	tests := []struct {
+		name    string
+		branch  string
+		wantErr bool
+	}{
+		{name: "normal branch", branch: "feature/login"},
+		{name: "branch with slash and dash", branch: "bugfix/fix-login-123"},
+		{name: "empty rejected", branch: "", wantErr: true},
+		{name: "leading dash rejected", branch: "-danger", wantErr: true},
+		{name: "leading whitespace rejected", branch: " feature/login", wantErr: true},
+		{name: "trailing whitespace rejected", branch: "feature/login ", wantErr: true},
+		{name: "newline rejected", branch: "feature/login\nnext", wantErr: true},
+		{name: "carriage return rejected", branch: "feature/login\rnext", wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateBranchName(tt.branch)
+			if tt.wantErr && err == nil {
+				t.Fatalf("expected error for branch %q", tt.branch)
+			}
+			if !tt.wantErr && err != nil {
+				t.Fatalf("unexpected error for branch %q: %v", tt.branch, err)
+			}
+		})
+	}
+}
+
+func TestFormatAPIErrorTruncatesAndRedactsToken(t *testing.T) {
+	body := strings.Repeat("A", maxAPIErrorBody+50) + " secret-token"
+	err := formatAPIError(403, []byte(body), "secret-token")
+	if err == nil {
+		t.Fatal("expected formatted API error")
+	}
+	msg := err.Error()
+	if strings.Contains(msg, "secret-token") {
+		t.Fatalf("error message leaked token: %s", msg)
+	}
+	if len(msg) > len("bitbucket API error 403: ")+maxAPIErrorBody+3 {
+		t.Fatalf("error message was not truncated: length %d", len(msg))
+	}
+}
+
+func TestFormatAPIErrorHandlesEmptyBody(t *testing.T) {
+	err := formatAPIError(500, []byte("   "), "")
+	if err == nil || err.Error() != "bitbucket API error 500" {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
