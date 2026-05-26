@@ -21,6 +21,9 @@ func (a *App) Run(args []string) error {
 		return a.PR(args[1:])
 	case "pipeline":
 		return a.Pipeline(args[1:])
+	case "version", "--version", "-v":
+		printVersion(a.Stdout)
+		return nil
 	case "help", "--help", "-h":
 		help()
 		return nil
