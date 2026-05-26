@@ -104,7 +104,7 @@ func (f fakeClientFactory) New(cfg Config) (APIClient, error) {
 	return f.client, nil
 }
 
-func newTestApp(client APIClient) (*App, *fakeInputReader, *fakeCredentialStore, *bytes.Buffer) {
+func newTestApp(client *fakeAPIClient) (*App, *fakeInputReader, *fakeCredentialStore, *bytes.Buffer) {
 	input := &fakeInputReader{confirm: true}
 	creds := newFakeCredentialStore()
 	stdout := &bytes.Buffer{}
@@ -121,7 +121,6 @@ func newTestApp(client APIClient) (*App, *fakeInputReader, *fakeCredentialStore,
 }
 
 func TestAppAuthLoginUsesInjectedDependencies(t *testing.T) {
-	client := &fakeWriteClient{}
 	input := &fakeInputReader{
 		lines:  []string{"rui@example.com", "", "workspace"},
 		secret: "secret-token",
@@ -134,8 +133,7 @@ func TestAppAuthLoginUsesInjectedDependencies(t *testing.T) {
 		Credentials: creds,
 		Git:         fakeGitRunner{},
 		Clients: fakeClientFactory{client: &fakeAPIClient{
-			fakeWriteClient: client,
-			user:            User{DisplayName: "Rui", Nickname: "rfp"},
+			user: User{DisplayName: "Rui", Nickname: "rfp"},
 		}},
 		Stdout: stdout,
 		Stderr: io.Discard,
