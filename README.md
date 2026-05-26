@@ -50,6 +50,18 @@ brew install rfp/bkt/bkt
 
 Use the fully-qualified formula name `rfp/bkt/bkt`: another Homebrew package is also named `bkt`, so plain `brew install bkt` may install the wrong project.
 
+Or install the latest release on Linux/macOS with the install script:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/rfp/bkt/main/install.sh | BKT_VERSION=v0.1.0 sh
+```
+
+You can choose the install directory:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/rfp/bkt/main/install.sh | BKT_VERSION=v0.1.0 BKT_INSTALL_DIR="$HOME/.local/bin" sh
+```
+
 Or clone and build:
 
 ```bash
@@ -285,6 +297,9 @@ But before splitting files, the project should earn the complexity.
 - [x] Add GitHub Actions.
 - [x] Add release builds.
 - [x] Add Homebrew tap.
+- [x] Add Linux/macOS install script.
+- [ ] Add deb/rpm packages.
+- [ ] Add Scoop manifest.
 - [ ] Add `bkt repo clone`.
 - [ ] Add `bkt pr comment`.
 - [ ] Add `bkt pr diff`.
