@@ -41,7 +41,16 @@ If you are looking for a useful little Bitbucket CLI seedling, welcome. 🌱
 
 ## 🚀 Quick start
 
-Clone and build:
+Install with Homebrew:
+
+```bash
+brew tap rfp/bkt
+brew install rfp/bkt/bkt
+```
+
+Use the fully-qualified formula name `rfp/bkt/bkt`: another Homebrew package is also named `bkt`, so plain `brew install bkt` may install the wrong project.
+
+Or clone and build:
 
 ```bash
 git clone https://github.com/rfp/bkt.git
@@ -56,7 +65,7 @@ Run the test suite:
 go test ./...
 ```
 
-Optionally move it to your PATH:
+Optionally move a local build to your PATH:
 
 ```bash
 sudo mv bkt /usr/local/bin/bkt
@@ -275,7 +284,7 @@ But before splitting files, the project should earn the complexity.
 - [x] Add tests.
 - [x] Add GitHub Actions.
 - [x] Add release builds.
-- [ ] Add Homebrew tap.
+- [x] Add Homebrew tap.
 - [ ] Add `bkt repo clone`.
 - [ ] Add `bkt pr comment`.
 - [ ] Add `bkt pr diff`.
