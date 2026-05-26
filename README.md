@@ -140,6 +140,21 @@ bkt pr approve 123
 bkt pr merge 123
 ```
 
+`bkt pr checkout <id>` fetches the PR source branch, then checks it out locally as:
+
+```text
+pr/<id>
+```
+
+For example:
+
+```bash
+bkt pr checkout 123
+# local branch: pr/123
+```
+
+This avoids accidentally reusing or overwriting a local branch with the same name as the remote PR source branch.
+
 ### Pipelines
 
 ```bash
